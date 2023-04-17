@@ -7,5 +7,9 @@
 			"path": "src/01_environment/fibonacci"
 		}
 	],
-	"settings": {}
+	"settings": {
+		"files.associations": {
+			"init.h": "c"
+		}
+	}
 }
