@@ -231,3 +231,30 @@ Dans le cas d'une interruption différée, nous retournons IRQ_WAKE_THREAD
 ## Pilotes de périphériques
 
 ### Exercice 1 - Pilotes orientés mémoire
+
+Dans cet exercice, il fallait réaliser un pilote orienté mémoire permettant
+de mapper en espace utilisateur les registres du microprocesseur en
+utilisant /dev/mem.
+Ce pilote permet de lire le Chip-ID.
+
+Pour ce faire, nous avons procédé ainsi:
+- Ouvrir le fichier /dev/mem avec la fonction open()
+- Mapper la mémoire physique du Chip-ID dans l'espace d'adressage virtuel
+  avec la fonction mmap(), avec les paramètres suivants:
+  - NULL: laisse le kernel choisir l'adresse virtuelle
+  - pz: une taille de page
+  - PROT_READ | PROT_WRITE: autorise la lecture et l'écriture
+  - MAP_SHARED: partage la mémoire avec d'autres processus
+  - fd: le descripteur de fichier du fichier /dev/mem précédemment ouvert
+  - l'offset du Chip-ID dans le fichier /dev/mem (soit dev_addr - (dev_addr % pz))
+- Lu les registres du Chip-ID à l'adresse virtuelle retournée par mmap()
+- Dé-mapper la mémoire avec la fonction munmap()
+- Fermer le fichier /dev/mem avec la fonction close()
+
+### Pilotes orientés caractères
+#### Exercice 2
+
+Dans cet exercice, il fallait réaliser un pilote orienté caractère
+capable de stocker dans une variable globale au module les données
+reçues par l'opération write et de les restituer par l'opération read.
+Pour tester le module, nous utiliserons les commandes echo et cat.
