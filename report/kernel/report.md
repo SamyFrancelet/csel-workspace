@@ -257,4 +257,166 @@ Pour ce faire, nous avons procédé ainsi:
 Dans cet exercice, il fallait réaliser un pilote orienté caractère
 capable de stocker dans une variable globale au module les données
 reçues par l'opération write et de les restituer par l'opération read.
-Pour tester le module, nous utiliserons les commandes echo et cat.
+Pour tester le module, nous utilisons les commandes echo et cat.
+
+Pour réaliser un pilote orienté caractère, nous devons définir les
+fonctions suivantes:
+- open(): appelée lors de l'ouverture du fichier
+- release(): appelée lors de la fermeture du fichier
+- read(): appelée lors d'une lecture du fichier (cat)
+- write(): appelée lors d'une écriture dans le fichier (echo >)
+
+Ces fonctions sont enregistrées dans la structure file_operations
+avec la fonction cdev_init() lors de l'initialisation du pilote.
+Avant d'utiliser cdev_init(), il faut enregistrer le numéro majeur
+du pilote avec la fonction alloc_chrdev_region().
+
+Une fois le pilote enregistré et installer, nous devons lui associer
+un fichier avec la commande mknod :
+
+```bash
+mknod /dev/mydriver c 511 0
+```
+
+Une fois le fichier associé, nous pouvons utiliser le pilote avec
+les commandes echo et cat:
+
+```bash
+echo "Coucou CSEL!" > /dev/mydriver
+cat /dev/mydriver
+Coucou CSEL!
+```
+
+Résultats des messages debug:
+
+```bash
+[ 2712.768790] mydriver: registered dev with major 511 and minor 0
+[ 2783.119330] mydriver: open operation, major:511, minor:0
+[ 2783.124777] mydriver: opened for read & write
+[ 2783.129196] mydriver: at0
+[ 2783.131866] mydriver: write operation, wrote=13
+[ 2783.136448] mydriver: release operation
+[ 2795.284020] mydriver: open operation, major:511, minor:0
+[ 2795.289423] mydriver: opened for read & write
+[ 2795.294013] mydriver: read operation, read=10000
+[ 2795.298939] mydriver: read operation, read=0
+[ 2795.303361] mydriver: release operation
+```
+
+#### Exercice 3
+
+Ici, il faut étendre le pilote précédent pour qu'on puisse spécifier
+le nombre d'instances du pilote à créer lors de l'installation du
+module.
+
+Comme dans l'exercice 2 sur les modules noyaux, nous devons utiliser
+un paramètre du module pour spécifier le nombre d'instances du pilote.
+
+Pour créer plusieurs instances du pilote, nous devons modifier l'appel
+à cdev_init() pour lui passer le nombre d'instances du pilote. Il faut
+également allouer dynamiquemenent un buffer par instance du pilote.
+Afin de pouvoir accéder au bon buffer lors des opérations read et write,
+nous devons passer le bon buffer dans le pointeur file_operations->private_data durant l'ouverture du fichier (open).
+Il suffit ensuite d'utiliser ce pointeur dans les fonctions read et write.
+
+#### Exercice 4
+
+Maintenant que nous avons un pilote orienté caractère, nous allons
+développer une petite application qui utilise ce pilote.
+
+Ici le code source de l'application:
+```c
+#include <fcntl.h>
+#include <stdio.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <unistd.h>
+
+static const char* text =
+    "\n"
+    "bonjour le monde\n"
+    "ce mois d'octobre est plutot humide...\n"
+    "ce n'est qu'un petit texte de test...\n";
+
+static const char* text2 =
+    "\n"
+    "et voici un complement au premier text..\n"
+    "ce n'est qu'un deuxieme petit texte de test...\n";
+
+static const char* blabla =
+    "blabla blabla blabla blabla blabla blabla blabla\n";
+
+int main(int argc, char* argv[])
+{
+    if (argc <= 1) return 0;
+
+    int fdw = open(argv[1], O_RDWR);
+    write(fdw, argv[1], strlen(argv[1]));
+    write(fdw, text, strlen(text));
+    write(fdw, text2, strlen(text2));
+
+    int s;
+    do {
+        s = write(fdw, blabla, strlen(blabla));
+    } while (s >= 0);
+    close(fdw);
+
+    int fdr = open(argv[1], O_RDONLY);
+    while (1) {
+        char buff[100];
+        ssize_t sz = read(fdr, buff, sizeof(buff) - 1);
+        if (sz <= 0) break;
+        buff[sizeof(buff) - 1] = 0;
+        printf("%s", buff);
+    }
+    close(fdr);
+
+    return 0;
+}
+```
+
+Ce programme prend en paramètre le nom du fichier associé au pilote et écrit dans ce fichier puis lit le contenu du fichier.
+Il affiche finalement le contenu du fichier et répète l'opération pour chaque texte.
+
+### sysfs
+
+#### Exercice 5
+
+Dans cet exercice, il fallait créer un pilote orienté caractère qui valide les fonctionnalités de sysfs.
+
+Pour ce faire, nous devons utiliser la fonction class_create() pour créer une classe de pilotes. Elle prend en paramètre
+THIS_MODULE et le nom de la classe. Cette fonction retourne un pointeur sur la classe créée.
+
+Avec ce pointeur, nous pouvons créer un device avec la fonction device_create(). Elle prend en paramètre la classe et le
+nom du device. Cette fonction retourne un pointeur sur le device créé.
+
+Finalement, pour installer le pilote dans sysfs, nous devons utiliser la fonction device_create_file(). Elle prend en paramètre
+le device et un pointeur sur la structure device_attribute,
+contenant le show et le store.
+
+Pour supprimer le pilote de sysfs, nous devons utiliser la fonction device_remove_file() pour supprimer le fichier associé,
+la fonction device_destroy() pour supprimer le device et la fonction class_destroy() pour supprimer la classe.
+
+#### Exercice 5.1
+
+Ici, il fallait ajouter au module de l'exercice 5 les opérations
+read et write de l'exercice 3.
+
+### Exercice 7 - Opérations bloquantes
+
+Dans cet exercice, le but était de créer une application utilisant
+les entrées et sorties bloquantes afin de signaler une interruption
+matérielle venant d'un switch.
+
+Pour ce faire, nous utilisons une wait_queue et un flag pour signaler
+l'interruption. Cela permettra à la fonction d'interruption de générer
+un événement dans la wait_queue et de quittancer l'interruption.
+Cette fonctionnalité nécessite l'opération poll() dans notre pilote,
+qui permettra d'accéder à des ressources de manière bloquante.
+Dans la fonction poll, nous utilisons la fonction poll_wait() avec
+notre wait_queue, et préparons le flag pour signaler que l'interruption
+n'a pas eu lieu.
+
+Dans la fonction d'interruption, nous utilisons la fonction wake_up_interruptible() sur notre wait_queue pour signaler
+l'interruption. Nous utilisons la fonction wake_up_interruptible() car
+elle permet de quitter la fonction poll().

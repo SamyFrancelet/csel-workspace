@@ -2,7 +2,7 @@
 ifneq ($(KERNELRELEASE),)
 obj-m += mymodule.o		## name of the generated module
 
-mymodule-objs := skeleton.o	## list of objects needed for that module
+mymodule-objs := mydriver.o	## list of objects needed for that module
 
 # Part executed when called from standard make in module source directory:
 else
